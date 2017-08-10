@@ -1,0 +1,42 @@
+---
+title: "Response to Youngflesh et al."
+author: "Sean C Anderson"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+if (!file.exists("generated-data/youngflesh.rda")) {
+  setwd("youngflesh-analysis")
+  source("Scripts/Analysis.R")
+  setwd("..")
+  rm(list = ls())
+}
+load("generated-data/youngflesh.rda")
+```
+
+```{r}
+library(ggplot2)
+max_rmax <- function(rmax = 0.2, obs_sd = 0.3, nyears = 25, ...) {
+  x <- 0 + rmax * seq(0, nyears-1) + rnorm(nyears, -0.5 * obs_sd^2, obs_sd)
+  x_r <- log(exp(x[2:length(x)])/exp(x[1:(length(x) - 1)]))
+  rmax_hat <- max(x_r, na.rm = TRUE) 
+  data.frame(rmax_hat)
+}
+```
+
+
+```{r}
+pars <- expand.grid(i = seq_len(500), obs_sd = c(0.1, 0.2, 0.4), nyears = 30, rmax = 0.2)
+out <- plyr::mdply(pars, max_rmax)
+ggplot(out, aes(as.factor(obs_sd), rmax_hat / rmax)) + 
+  geom_violin(fill = "grey80", col = "grey80") + 
+  geom_point(position = position_jitter(width = 0.1, height = 0), alpha = 0.05, cex = 0.3) +
+  ggsidekick::theme_sleek() +
+  geom_hline(aes(yintercept = 1), lty = 2) +
+  ylab(expression(widehat(r[max])/r[max])) +
+  xlab("Observation error SD (on log scale)") +
+  scale_y_continuous(breaks = c(1, 2, 5, 10, 15)) +
+  theme(axis.title.x = element_text(size = 9))
+ggsave("obs-err.pdf", width = 4, height = 3.5)
+```
+
