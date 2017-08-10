@@ -24,7 +24,7 @@ require(dplyr)
 
 # Create data -------------------------------------------------------------
 
-setwd('youngflesh-analysis/Data')
+setwd('Data')
 
 #load in cleaned GPDD data from Anderson et al. 2017
 gpdd <- readRDS("gpdd-clean.rds")
@@ -201,5 +201,7 @@ mean(max_vals/mean_vals)
 
 #Red grouse - 10128 - 16-fold increase in abundance - Potts et al. 1984 source
 RG <- filter(gpdd, main_id == 10128)
-plot(RG$series_step, RG$population_untransformed, type ='b')
-cbind(RG$sample_year, RG$population_untransformed)
+# plot(RG$series_step, RG$population_untransformed, type ='b')
+# cbind(RG$sample_year, RG$population_untransformed)
+
+save(f_data, unphysical, bs_data, bs_unphysical, file = "../../generated-data/youngflesh.rda")
