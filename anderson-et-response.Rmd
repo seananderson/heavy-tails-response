@@ -12,6 +12,7 @@ if (!file.exists("generated-data/youngflesh.rda")) {
   rm(list = ls())
 }
 load("generated-data/youngflesh.rda")
+gpdd <- readRDS("youngflesh-analysis/Data/gomp-base-hat.rds")
 ```
 
 ```{r}
@@ -25,18 +26,78 @@ max_rmax <- function(rmax = 0.2, obs_sd = 0.3, nyears = 25, ...) {
 ```
 
 
-```{r}
-pars <- expand.grid(i = seq_len(500), obs_sd = c(0.1, 0.2, 0.4), nyears = 30, rmax = 0.2)
-out <- plyr::mdply(pars, max_rmax)
-ggplot(out, aes(as.factor(obs_sd), rmax_hat / rmax)) + 
-  geom_violin(fill = "grey80", col = "grey80") + 
-  geom_point(position = position_jitter(width = 0.1, height = 0), alpha = 0.05, cex = 0.3) +
-  ggsidekick::theme_sleek() +
-  geom_hline(aes(yintercept = 1), lty = 2) +
-  ylab(expression(widehat(r[max])/r[max])) +
-  xlab("Observation error SD (on log scale)") +
-  scale_y_continuous(breaks = c(1, 2, 5, 10, 15)) +
-  theme(axis.title.x = element_text(size = 9))
-ggsave("obs-err.pdf", width = 4, height = 3.5)
+```{r out, cache=TRUE}
+pars <- expand.grid(i = seq_len(2000), obs_sd = c(0.05, 0.1, 0.2, 0.4), 
+  nyears = 25, rmax = c(0.5, 1, 2))
+out <- plyr::mdply(pars, max_rmax) %>% 
+  mutate(rmax_facet = paste("r[max] =", rmax))
 ```
 
+```{r, dependson="out", cache=TRUE}
+ggplot(out, aes(as.factor(obs_sd), rmax_hat / rmax)) + 
+  geom_violin(fill = "grey60", col = "grey60") +
+  # geom_point(position = position_jitter(width = 0.15, height = 0), alpha = 0.05, cex = 0.3) +
+  ggsidekick::theme_sleek() + # https://github.com/seananderson/ggsidekick
+  geom_hline(aes(yintercept = 1), lty = 2) +
+  ylab(expression(widehat(r[max])/r)) +
+  xlab("Observation error SD (on log scale)") +
+  scale_y_continuous(breaks = c(1, 2, 3, 4, 5, 10, 20, 40), limits = c(1, 5)) +
+  theme(axis.title.x = element_text(size = 9)) +
+  facet_grid(. ~ rmax, labeller = label_bquote(cols = r==.(rmax))) 
+ggsave("obs-err.pdf", width = 5.7, height = 2.5)
+```
+
+```{r, dependson="out", cache=TRUE}
+y <- dplyr::filter(out, obs_sd == 0.4)
+med_over <- round(median(y$rmax_hat / y$rmax), 1)
+```
+
+```{r}
+library(dplyr)
+gpdd <- readRDS("data/gomp-obs-0.2-extra-iterations-hat.rds")
+x <- readRDS("~/src/heavy-tails/analysis/logistic-hat.rds")
+names(gpdd) <- gsub("^r_", "lambda_", names(gpdd))
+# gpdd <- readRDS("youngflesh-analysis/Data/gomp-base-hat.rds")
+d <- left_join(select(gpdd, starts_with("lambda"), main_id), f_data) %>% 
+  filter(!is.na(r_max))
+
+dd <- filter(d, lambda_50 > 0)
+hist(log(dd$lambda_50 / dd$Rho))
+
+nrow(filter(d, lambda_5 < Rho & lambda_95 > Rho)) / nrow(d)
+
+nrow(filter(d, lambda_5 < Rho)) / nrow(d)
+
+nrow(filter(d, lambda_95 > Rho)) / nrow(d)
+
+lambda_high <- filter(d, lambda_5 > Rho, p10 > 0.5)
+tot <- filter(d, p10 > 0.5)
+nrow(lambda_high)
+nrow(tot)
+round(nrow(lambda_high) / nrow(tot), 2)
+
+filter(d, lambda_25 > Rho, p10 > 0.5)
+
+lambda_low <- filter(d, lambda_95 < Rho, p10 > 0.5)
+lambda_low
+
+filter(d, r_max > Rho, p10 > 0.5)
+filter(d, lambda_50 > Rho, p10 > 0.5)
+```
+
+```{r}
+filter(d, p10 > 0.5) %>% 
+  mutate(dif = lambda_50 - Rho) %>% 
+  arrange(dif) %>% 
+  mutate(id = paste0(common_name, " / ", main_id)) %>%
+  mutate(id = forcats::fct_reorder(id, dif)) %>% 
+  ggplot(aes(Rho, id)) +
+  geom_segment(aes(x = lambda_5, y = id, xend = lambda_95, yend = id), lwd = 0.2) +
+  geom_segment(aes(x = lambda_25, y = id, xend = lambda_75, yend = id), lwd = 1.1) +
+  geom_point(col = "red", pch = 3) +
+  geom_point(aes(x = r_max), pch = 21) +
+  ggsidekick::theme_sleek() +
+  theme(panel.grid.major.y = element_line(colour = "grey90", linetype = 1)) +
+  ylab("") + xlab("Maximum per-capita growth rate")
+ggsave("rmax.pdf", width = 5.5, height = 5)
+```
