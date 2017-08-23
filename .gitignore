@@ -7,3 +7,7 @@
 *.html
 
 *.rda
+*_cache/
+*.docx
+*.mindnode*
+*.rds
