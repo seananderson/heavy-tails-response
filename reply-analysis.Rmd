@@ -1,0 +1,198 @@
+---
+title: "Response to Youngflesh et al."
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+if (!file.exists("generated-data/youngflesh.rda")) {
+  setwd("youngflesh-analysis")
+  source("Scripts/Analysis.R")
+  setwd("..")
+  rm(list = ls())
+}
+load("generated-data/youngflesh.rda")
+gpdd <- readRDS("youngflesh-analysis/Data/gomp-base-hat.rds")
+```
+
+```{r}
+library(ggplot2)
+max_rmax <- function(rmax = 0.2, obs_sd = 0.3, nyears = 25, ...) {
+  x <- 0 + rmax * seq(0, nyears-1) + rnorm(nyears, -0.5 * obs_sd^2, obs_sd)
+  x_r <- log(exp(x[2:length(x)])/exp(x[1:(length(x) - 1)]))
+  rmax_hat <- max(x_r, na.rm = TRUE) 
+  data.frame(rmax_hat)
+}
+```
+
+
+```{r out, cache=TRUE}
+pars <- expand.grid(i = seq_len(2000), obs_sd = c(0.05, 0.1, 0.2, 0.4), 
+  nyears = 25, rmax = c(0.5, 1, 2))
+out <- plyr::mdply(pars, max_rmax) %>% 
+  mutate(rmax_facet = paste("r[max] =", rmax))
+```
+
+```{r, dependson="out", cache=TRUE}
+ggplot(out, aes(as.factor(obs_sd), rmax_hat / rmax)) + 
+  geom_violin(fill = "grey60", col = "grey60") +
+  # geom_point(position = position_jitter(width = 0.15, height = 0), alpha = 0.05, cex = 0.3) +
+  ggsidekick::theme_sleek() + # https://github.com/seananderson/ggsidekick
+  geom_hline(aes(yintercept = 1), lty = 2) +
+  ylab(expression(widehat(r[max])/r)) +
+  xlab("Observation error SD (on log scale)") +
+  scale_y_continuous(breaks = c(1, 2, 3, 4, 5, 10, 20, 40), limits = c(1, 5)) +
+  theme(axis.title.x = element_text(size = 9)) +
+  facet_grid(. ~ rmax, labeller = label_bquote(cols = r==.(rmax))) 
+ggsave("obs-err.pdf", width = 5.7, height = 2.5)
+obs_sim <- out
+```
+
+This runs the models with a random walk and fixed observation error:
+
+```{r}
+library(dplyr)
+library(rstan)
+rstan_options(auto_write = TRUE)
+
+if (!file.exists("stan-obs-rw.rds")) {
+  stan_model_obs_rw <- stan_model(file = "rw-obs.stan") 
+  saveRDS(stan_model_obs_rw, file = "stan-obs-rw.rds")
+} else {
+  stan_model_obs_rw <- readRDS("stan-obs-rw.rds")
+}
+
+gpdd <- readRDS("youngflesh-analysis/Data/gpdd-clean.rds")
+load("generated-data/youngflesh.rda")
+gpdd <- inner_join(gpdd, select(f_data, main_id, Rho, p10))
+
+gpdd <- filter(gpdd, p10 > 0.5)
+# length(unique(gpdd$main_id))
+
+if (!file.exists("stan-obs-rw.rds")) {
+  out <- lapply(unique(gpdd$main_id), function(ii) {
+    x <- filter(gpdd, main_id == ii)
+    m <- sampling(stan_model_obs_rw,
+      data = list(N = nrow(x), y = log(x$population_untransformed), 
+        sigma_obs = 0.2),
+      iter = 2000, chains = 4, control = list(adapt_delta = 0.95))
+    
+    s <- rstan::extract(m, pars = "U")$U
+    diff_m <- matrix(ncol = ncol(s) - 1, nrow = nrow(s))
+    for (i in 2:ncol(s))
+      diff_m[, i - 1] <- s[, i] - s[, i - 1]
+    
+    medians <- apply(diff_m, 2, median)
+    max_id <- which(medians == max(medians))
+    
+    q <- as.data.frame(t(quantile(diff_m[, max_id],
+      probs = c(0.025, 0.25, 0.5, 0.75, 0.975))))
+    q$main_id <- ii
+    list(r_max = q, U = s, max_diff_post = diff_m[, max_id])
+  })
+  saveRDS(out, file = "out.rds")
+} else {
+  out <- readRDS("out.rds")
+}
+
+rmax_obs <- plyr::ldply(out, function(x) x$r_max) %>%
+  inner_join(select(f_data, main_id, Rho, p10, common_name, r_max)) %>%
+  mutate(id = paste(common_name, main_id)) %>%
+  mutate(dif = `50%` - Rho) %>%
+  mutate(id = paste0(common_name, " / ", main_id)) %>%
+  mutate(id = forcats::fct_reorder(id, dif))
+
+ggplot(rmax_obs, aes(`50%`, id)) + geom_point() +
+  geom_segment(aes(y = id, yend = id,
+    x = `2.5%`, xend = `97.5%`)) +
+  geom_point(aes(x = Rho), col = "red", pch = 3) +
+  geom_point(aes(x = r_max), pch = 21) +
+  ggsidekick::theme_sleek() +
+  theme(panel.grid.major.y = element_line(colour = "grey90", linetype = 1)) +
+  ylab("") + xlab("Maximum per-capita growth rate")
+ggsave("rw-obs-maxr.pdf", width = 6, height = 5)
+
+filter(rmax_obs, `50%` > Rho)
+filter(rmax_obs, `25%` > Rho)
+filter(rmax_obs, `2.5%` > Rho)
+
+rmax_obs_p <- plyr::ldply(out, function(x) {
+  p <- mean(x$max_diff_post < f_data$Rho[f_data$main_id == x$r_max$main_id[[1]]])
+  data.frame(prob = p, main_id = x$r_max$main_id[[1]])
+}) 
+rmax_obs_p %>% arrange(prob)
+filter(rmax_obs_p, prob < 0.5)
+
+rmax_obs_p %>% arrange(prob)
+filter(rmax_obs_p, prob < 0.5)
+
+filter(rmax_obs, r_max > Rho)
+```
+
+Pretty figure version:
+
+```{r}
+add_label <- function(label = "", xfrac = -0.02, yfrac = -0.04, pos = 4, ...) {
+  u <- par("usr")
+  x <- u[1] + xfrac * (u[2] - u[1])
+  y <- u[4] - yfrac * (u[4] - u[3])
+  text(x, y, label, pos = pos, ...)
+}
+g <- ggplot(obs_sim, aes(as.factor(obs_sd), rmax_hat / rmax)) + 
+  geom_violin(fill = "grey60", col = "grey60") +
+  facet_grid(. ~ rmax)
+gg <- ggplot_build(g)
+d <- gg$data[[1]]
+
+pdf("fig.pdf", width = 6, height = 5)
+layout(rbind(c(1, 4), c(2, 4), c(3, 4)))
+par(mar = c(0,0,0,0.5), oma = c(3, 3.0, 1, 12), tck = -0.015, mgp = c(2, 0.5, 0), col.axis = "grey25", col = "grey25")
+par(cex = 0.8)
+# plot(1, 1, type = "n", xlim = c(1, 4), ylim = c(1, 5), xlab = "", ylab = "", yaxt = "n", xaxs = "i", yaxs = "i", las = 1)
+par(xpd = FALSE)
+
+scale_ <- 0.6
+ii <- 1
+bean <- function(x) {
+  if (ii == 3) scale_ <- 0.8
+  plot(1, 1, type = "n", xlim = c(0.4, 4.2), ylim = c(0.8, 4.1), xlab = "", ylab = "", yaxt = "n", xaxs = "i", yaxs = "i", las = 1,
+    xaxt = "n", ann = FALSE, bty = "n")
+  for (i in unique(x$x)) {
+    xx <- filter(x, x == i)
+    polygon(c(xx$x - xx$violinwidth*scale_, rev(xx$x + xx$violinwidth*scale_)), c(xx$y, rev(xx$y)),
+      col = "grey58", border = NA, lwd = 0.1)
+  }
+  box(col = "grey50")
+  add_label(LETTERS[[ii]], xfrac = 0.01, yfrac = 0.11, cex = 1.2)
+  ii <<- ii + 1
+  axis(2, col = "grey50", las = 1, at = c(1, 2, 3))
+  abline(h = 1, col = "grey70", lty = 2, lwd = 1.2)
+}
+plyr::d_ply(d, "PANEL", function(x) bean(x))
+
+par(xpd = NA)
+axis(1, col = "grey", at = 1:4, labels = unique(obs_sim$obs_sd))
+mtext("Observation CV", side = 1, line = 1.7)
+mtext("Maximum observed r / r", side = 2, line = 1.5, outer = TRUE)
+par(xpd = FALSE)
+
+rm <- rmax_obs
+rm$id <- sub("Cabbage root fly or maggot", "Cabbage root fly", rm$id)
+rm$id <- sub("Pine looper or Bordered white", "Pine looper", rm$id)
+rm$id <- gsub("  ", " ", rm$id)
+rm$id <- gsub(" / ", ", ", rm$id)
+rm <- arrange(rm, dif)
+plot(1, 1, xlim = c(0, 7), ylim = c(1, nrow(rm)), type = "n",
+  ann = FALSE, ylab = "", xlab = "", bty = "n", xaxt = "n", yaxt = "n")
+points(rm$`50%`, 1:nrow(rm), pch = 19, col = "grey30")
+segments(rm$`2.5%`, 1:nrow(rm), rm$`97.5`, 1:nrow(rm), col = "grey30")
+points(rm$r_max, 1:nrow(rm), col = "grey30", bg = "#FFFFFF", pch = 21)
+points(rm$Rho, 1:nrow(rm), pch = 4, col = "red")
+box(col = "grey50")
+axis(1, col = "grey50", at = seq(0, 8, 2))
+axis(2, side = 4, at = 1:nrow(rm), labels = rm$id, las = 1, tcl = 0, col = "grey50")
+add_label("D", xfrac = 0.82, yfrac = 0.035, cex = 1.2)
+par(xpd = NA)
+mtext("Maximum r", side = 1, line = 1.7)
+dev.off()
+```
+
