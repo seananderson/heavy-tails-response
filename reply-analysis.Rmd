@@ -195,7 +195,7 @@ rm_$id <- sub("Unknown", "Carrot psyllid", rm_$id)
 rm_$id <- gsub("  ", " ", rm_$id)
 rm_$id <- gsub(" / ", " (", rm_$id)
 rm_$id <- paste0(rm_$id, ")")
-rm <- arrange(rm, dif)
+rm_ <- dplyr::arrange(rm_, dif)
 plot(1, 1, xlim = c(0, 7), ylim = c(1, nrow(rm_)), type = "n",
   ann = FALSE, ylab = "", xlab = "", bty = "n", xaxt = "n", yaxt = "n")
 points(rm_$`50%`, 1:nrow(rm_), pch = 19, col = "grey30")
