@@ -74,7 +74,7 @@ gpdd <- inner_join(gpdd, select(f_data, main_id, Rho, p10))
 gpdd <- filter(gpdd, p10 > 0.5)
 # length(unique(gpdd$main_id))
 
-if (!file.exists("stan-obs-rw.rds")) {
+if (!file.exists("out.rds")) {
   out <- lapply(unique(gpdd$main_id), function(ii) {
     x <- filter(gpdd, main_id == ii)
     m <- sampling(stan_model_obs_rw,
