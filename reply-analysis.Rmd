@@ -1,7 +1,9 @@
 ---
-title: "Response to Youngflesh et al."
+title: "Response to Youngflesh and Lynch"
 output: html_document
 ---
+
+First let's load the data from Youngflesh and Lynch:
 
 ```{r, warning=FALSE, message=FALSE}
 if (!file.exists("generated-data/youngflesh.rda")) {
@@ -14,6 +16,8 @@ load("generated-data/youngflesh.rda")
 gpdd <- readRDS("youngflesh-analysis/Data/gomp-base-hat.rds")
 ```
 
+Let's create a function that simulates a constant population growth rate with observation error and returns the maximum observed growth rate:
+
 ```{r}
 library(ggplot2)
 max_rmax <- function(rmax = 0.2, obs_sd = 0.3, nyears = 25, ...) {
@@ -24,6 +28,7 @@ max_rmax <- function(rmax = 0.2, obs_sd = 0.3, nyears = 25, ...) {
 }
 ```
 
+Now we will run our function over a set of parameter values:
 
 ```{r out, cache=TRUE}
 pars <- expand.grid(i = seq_len(2000), obs_sd = c(0.05, 0.1, 0.2, 0.4), 
@@ -32,10 +37,11 @@ out <- plyr::mdply(pars, max_rmax) %>%
   mutate(rmax_facet = paste("r[max] =", rmax))
 ```
 
+And make a quick plot of the simulation output with ggplot:
+
 ```{r, dependson="out", cache=TRUE}
 ggplot(out, aes(as.factor(obs_sd), rmax_hat / rmax)) + 
   geom_violin(fill = "grey60", col = "grey60") +
-  # geom_point(position = position_jitter(width = 0.15, height = 0), alpha = 0.05, cex = 0.3) +
   ggsidekick::theme_sleek() + # https://github.com/seananderson/ggsidekick
   geom_hline(aes(yintercept = 1), lty = 2) +
   ylab(expression(widehat(r[max])/r)) +
@@ -47,7 +53,7 @@ ggsave("obs-err.pdf", width = 5.7, height = 2.5)
 obs_sim <- out
 ```
 
-This runs the models with a random walk and fixed observation error:
+This next code chunk fits models with Stan to the GPDD populations that were flagged in Youngflesh and Lynch with a random walk and fixed observation error:
 
 ```{r}
 library(dplyr)
@@ -100,7 +106,11 @@ rmax_obs <- plyr::ldply(out, function(x) x$r_max) %>%
   mutate(dif = `50%` - Rho) %>%
   mutate(id = paste0(common_name, " / ", main_id)) %>%
   mutate(id = forcats::fct_reorder(id, dif))
+```
 
+Let's make a quick plot of the model output and count some values:
+
+```{r}
 ggplot(rmax_obs, aes(`50%`, id)) + geom_point() +
   geom_segment(aes(y = id, yend = id,
     x = `2.5%`, xend = `97.5%`)) +
@@ -128,7 +138,7 @@ filter(rmax_obs_p, prob < 0.5)
 filter(rmax_obs, r_max > Rho)
 ```
 
-Pretty figure version:
+Now let's generate a final combined figure for the paper:
 
 ```{r}
 add_label <- function(label = "", xfrac = -0.02, yfrac = -0.04, pos = 4, ...) {
@@ -181,6 +191,7 @@ par(xpd = FALSE)
 rm <- rmax_obs
 rm$id <- sub("Cabbage root fly or maggot", "Cabbage root fly", rm$id)
 rm$id <- sub("Pine looper or Bordered white", "Pine looper", rm$id)
+rm$id <- sub("Unknown", "Carrot psyllid", rm$id)
 rm$id <- gsub("  ", " ", rm$id)
 rm$id <- gsub(" / ", " (", rm$id)
 rm$id <- paste0(rm$id, ")")
@@ -204,4 +215,3 @@ text(2.5, 18.5, "Maximum r\nwith obs. CV = 0.2", pos = 4, cex = 0.9)
 arrows(2.8, 19.3, 2.55, 19.7, length = 0.06, col = "grey20")
 dev.off()
 ```
-
