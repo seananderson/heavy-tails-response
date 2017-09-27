@@ -215,3 +215,24 @@ text(2.5, 18.5, "Maximum r\nwith obs. CV = 0.2", pos = 4, cex = 0.9)
 arrows(2.8, 19.3, 2.55, 19.7, length = 0.06, col = "grey20")
 dev.off()
 ```
+
+Packages used:
+
+```{r}
+pkgs <- c("rstan", "dplyr", "ggplot2")
+x <- devtools::session_info(pkgs = pkgs)
+x <- as.data.frame(x$packages)
+x <- dplyr::filter(x, package %in% pkgs) %>% 
+  dplyr::select(-`*`, -date, -source) %>% 
+  dplyr::arrange(package)
+x
+```
+
+At time of publication:
+
+```
+package version
+1   dplyr   0.7.3
+2 ggplot2   2.2.1
+3   rstan  2.16.2
+```
