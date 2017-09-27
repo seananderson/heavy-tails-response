@@ -55,7 +55,7 @@ obs_sim <- out
 
 This next code chunk fits models with Stan to the GPDD populations that were flagged in Youngflesh and Lynch with a random walk and fixed observation error:
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(dplyr)
 library(rstan)
 rstan_options(auto_write = TRUE)
