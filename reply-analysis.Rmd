@@ -9,7 +9,7 @@ First let's load the data from Youngflesh and Lynch:
 if (!file.exists("generated-data/youngflesh.rda")) {
   setwd("youngflesh-analysis")
   source("Scripts/Analysis.R")
-  setwd("..")
+  setwd("../../")
   rm(list = ls())
 }
 load("generated-data/youngflesh.rda")

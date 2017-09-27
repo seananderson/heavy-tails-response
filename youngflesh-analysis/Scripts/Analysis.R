@@ -204,4 +204,6 @@ RG <- filter(gpdd, main_id == 10128)
 # plot(RG$series_step, RG$population_untransformed, type ='b')
 # cbind(RG$sample_year, RG$population_untransformed)
 
+if (!file.exists("../../generated-data")) 
+  dir.create("../../generated-data/", showWarnings = FALSE)
 save(f_data, unphysical, bs_data, bs_unphysical, file = "../../generated-data/youngflesh.rda")
