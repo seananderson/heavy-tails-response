@@ -1,5 +1,7 @@
 # Reply to Youngflesh and Lynch: Migration and population growth rate in animal black-swan events
 
+[![DOI](https://zenodo.org/badge/99962003.svg)](https://zenodo.org/badge/latestdoi/99962003)
+
 This repository contains data and code for the letter:
 Anderson SC, Branch TA, Cooper AB, Dulvy NK. 2017. Reply to Youngflesh and Lynch: Migration and population growth rate in animal black-swan events. In press at Proceedings of the National Academy of Sciences.
 
